@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Account – AAA Tools Hub{% endblock %}
+{% block main %}
+<h1>Your account</h1>
+<p class="lead">{{ u.name }} · {{ 'admin' if u.is_admin else 'member' }}</p>
+{% if request.query_params.get('saved') %}<p class="card">Saved.</p>{% endif %}
+<form class="card row" method="post" action="/account">
+  <label>Initials for output file names <input name="initials" value="{{ u.initials or '' }}" maxlength="6"
+         placeholder="{{ example }}" style="max-width:120px"></label>
+  <button>Save</button>
+</form>
+<p class="muted small">They go at the end of every output file name from the steps you run, e.g.
+  <code>2026.11.20 - Sample Developer - DEMO - PTE &amp; Tender Evaluation - Rev.00 - {{ u.initials or example or 'AAN' }}.xlsx</code>.
+  Left empty, the first letters of your name are used ({{ example or '—' }}).</p>
+{% endblock %}

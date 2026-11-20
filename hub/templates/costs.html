@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}Costs – AAA Tools Hub{% endblock %}
+{% block main %}
+<h1>Costs</h1>
+<p class="lead">Claude API calls and what they cost. {{ month }}: <b>${{ '%.2f'|format(spend) }}</b> spent of a
+  <b>${{ '%.2f'|format(limit) }}</b> monthly limit; new runs stop when it is reached. Prices come from
+  <code>config/model_prices.json</code>. Stage A: the Claude step runs in Claude Code, so nothing is logged yet.</p>
+
+<form class="card row" method="post" action="/costs/limit">
+  <label>Monthly limit (USD) <input name="limit" type="number" step="0.01" min="0" value="{{ '%.2f'|format(limit) }}"></label>
+  <button>Save</button>
+</form>
+
+<form class="card row" method="get" action="/costs">
+  <label>From <input type="date" name="date_from" value="{{ f.date_from }}"></label>
+  <label>To <input type="date" name="date_to" value="{{ f.date_to }}"></label>
+  <label>User <select name="user">
+    <option value="">Everyone</option>
+    {% for x in users %}<option value="{{ x.id }}" {{ 'selected' if f.user == x.id|string }}>{{ x.name }}</option>{% endfor %}
+  </select></label>
+  <button>Filter</button>
+  {% if qs %}<a href="/costs">Clear</a>{% endif %}
+  <a class="btn-link" href="/costs.csv{{ '?' + qs if qs }}">Export CSV</a>
+</form>
+
+<p><b>{{ total.calls }}</b> call(s), <b>{{ num(total.tokens) }}</b> tokens, <b>${{ '%.2f'|format(total.usd) }}</b>
+  {% if qs %}<span class="muted">(filtered)</span>{% endif %}</p>
+
+{% if samples %}
+<div class="card">This list includes {{ samples }} sample entr{{ 'y' if samples == 1 else 'ies' }} (marked <i>sample</i>), made up to try the page;
+  they don't count toward the monthly limit.
+  <form method="post" action="/costs/samples" style="display:inline"><input type="hidden" name="action" value="delete">
+  <button onclick="return confirm('Delete all sample entries? Real entries are kept.')">Delete sample entries</button></form></div>
+{% elif not rows and not qs %}
+<form class="card row" method="post" action="/costs/samples"><input type="hidden" name="action" value="add">
+  <span>Nothing logged yet.</span> <button>Add sample entries</button></form>
+{% endif %}
+
+<div class="cost-groups">
+{% for title, items in groups.items() %}
+  <section>
+    <h2>{{ title }}</h2>
+    <table>
+      <thead><tr><th></th><th class="n">Calls</th><th class="n">Input</th><th class="n">Output</th><th class="n">Cache read</th><th class="n">Cache write</th><th class="n">USD</th></tr></thead>
+      <tbody>
+      {% for t in items %}
+        <tr><td>{{ t.name }}</td><td class="n">{{ t.calls }}</td><td class="n">{{ num(t.input) }}</td><td class="n">{{ num(t.output) }}</td>
+            <td class="n">{{ num(t.cache_read) }}</td><td class="n">{{ num(t.cache_write) }}</td><td class="n">{{ '%.2f'|format(t.usd) }}</td></tr>
+      {% else %}
+        <tr><td colspan="7" class="muted">Nothing for these filters.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </section>
+{% endfor %}
+</div>
+
+<h2>Every call</h2>
+<table>
+  <thead><tr><th>Date/time (UTC)</th><th>User</th><th>Project</th><th>Task / module</th><th>Model</th><th class="n">Input</th><th class="n">Output</th>
+    <th class="n">Cache read</th><th class="n">Cache write</th><th class="n">USD</th><th>Job</th></tr></thead>
+  <tbody>
+  {% for r in rows %}
+    <tr><td>{{ r.ts[:16] }}{% if r.sample %} <i class="muted">sample</i>{% endif %}</td><td>{{ r.uname or '' }}</td><td>{{ r.pname or '' }}</td>
+        <td>{{ r.task }}</td><td>{{ r.model }}{% if r.note and not r.sample %}<br><span class="muted small">{{ r.note }}</span>{% endif %}</td>
+        <td class="n">{{ num(r.input_tokens) }}</td><td class="n">{{ num(r.output_tokens) }}</td>
+        <td class="n">{{ num(r.cache_read_tokens) }}</td><td class="n">{{ num(r.cache_write_tokens) }}</td>
+        <td class="n">{{ '%.4f'|format(r.usd) }}</td>
+        <td>{% if r.job_id %}<a href="/jobs/{{ r.job_id }}">{{ r.job_id }}</a>{% endif %}</td></tr>
+  {% else %}
+    <tr><td colspan="11" class="muted">No calls for these filters.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

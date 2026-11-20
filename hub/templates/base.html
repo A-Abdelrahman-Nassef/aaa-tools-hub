@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}AAA Tools Hub{% endblock %}</title>
+<link rel="stylesheet" href="/static/style.css">
+{% block head %}{% endblock %}
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="/projects"><span>AAA</span> Tools Hub</a>
+  {% if u %}
+  <nav>
+    <a href="/projects">Projects</a>
+    {% if u.is_admin %}<a href="/costs">Costs</a>
+    <a href="/users">Users{% set np = pending_users() %}{% if np %} <span class="st st-stale">{{ np }}</span>{% endif %}</a>{% endif %}
+    <a class="who" href="/account" title="Your account and initials">{{ u.name }}</a>
+    <a href="/logout">Sign out</a>
+  </nav>
+  {% endif %}
+</header>
+<main>
+{% block main %}{% endblock %}
+</main>
+<footer>Stage A · runs on this laptop · the Claude step is done in Claude Code</footer>
+</body>
+</html>

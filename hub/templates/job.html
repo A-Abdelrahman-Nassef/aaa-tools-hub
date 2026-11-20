@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+{% block title %}Job {{ j.id }} – AAA Tools Hub{% endblock %}
+{% block head %}{% if busy %}<meta http-equiv="refresh" content="2">{% endif %}{% endblock %}
+
+{% macro fmt(v) %}{{ '' if v is none else '{:,.2f}'.format(v) }}{% endmacro %}
+{% macro checktable(rows) %}
+<table>
+  <thead><tr><th>Asset</th><th>Level</th><th>Check</th><th class="n">Value</th><th>Result</th></tr></thead>
+  <tbody>
+  {% for c in rows %}
+    <tr class="{{ '' if c.ok else ('rw' if c.warn_only else 'rb') }}"><td>{{ c.asset }}</td><td>{{ c.level }}</td><td>{{ c.check }}</td>
+      <td class="n">{% if c.value is not none %}{{ ('%+.2f' if c.unit == '%' and 'skin' in c.check else '%.2f')|format(c.value) }}{{ ' ' ~ c.unit if c.unit == 'm²' else c.unit }}{% endif %}</td>
+      <td>{% if c.ok %}<span class="ok">Pass</span>{% elif c.warn_only %}<span class="warn">Warning</span>{% else %}<span class="bad">Fail</span>{% endif %}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endmacro %}
+
+{% block main %}
+{% set stage = 'spec' if j.status in ('awaiting_spec', 'spec_error') else ('review' if j.status in ('checking', 'review') else 'build') %}
+<p class="crumb"><a href="/projects">Projects</a> / <a href="/projects/{{ p.id }}">{{ p.name }}</a> /</p>
+<h1>{{ job_name(j) }} <small>{{ j.rev }}</small></h1>
+<p><span class="st st-{{ j.status }}">{{ j.status.replace('_', ' ') }}</span>
+   {% if j.message %}<span class="msg">{{ j.message }}</span>{% endif %}</p>
+
+<ol class="steps">
+  <li class="{{ 'now' if stage == 'spec' else 'done' }}"><b>1 · Claude step (in Claude Code)</b><br>{{ m.claude_step }}</li>
+  <li class="{{ 'now' if stage == 'review' else ('done' if stage == 'build' else '') }}"><b>2 · Review</b><br>Check the numbers and the 3D preview, fix names and the atrium floor, confirm each judgement call.</li>
+  <li class="{{ 'done' if j.status == 'done' else ('now' if stage == 'build' else '') }}"><b>3 · Build and download</b><br>Workbook, 3D model and offline client copy per asset, from the approved review.</li>
+</ol>
+
+<section>
+  <h2>Specs</h2>
+  <table>
+    <tbody>
+    {% for s in spec %}
+      <tr><td>{{ s }}</td><td class="n">
+        {% if not busy %}<form method="post" action="/jobs/{{ j.id }}/spec/{{ s }}/delete" class="inline"><button class="link">Remove</button></form>{% endif %}</td></tr>
+    {% else %}
+      <tr><td class="muted">No spec yet. Upload one file per asset.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% if not busy %}
+  <form class="card row" method="post" action="/jobs/{{ j.id }}/spec" enctype="multipart/form-data">
+    <label>Spec files ({{ '.py or .json' if allow_py else '.json' }}). Uploading checks them straight away.
+      <input type="file" name="files" multiple required accept="{{ '.py,.json' if allow_py else '.json' }}"></label>
+    <button>Upload and check</button>
+  </form>
+  {% endif %}
+  {% if j.status == 'spec_error' %}
+  <p class="card bad-card">The spec could not be read: <code>{{ j.message }}</code>. Fix it in Claude Code and upload it again.
+     <a href="/jobs/{{ j.id }}/log?which=check" target="_blank">Check log</a></p>
+  {% endif %}
+</section>
+
+{% if j.status == 'checking' %}
+<p class="card">Checking the spec… this page refreshes by itself.</p>
+{% endif %}
+
+{% if check and items and stage == 'review' %}
+{% set hard = checks|selectattr('ok', 'false')|rejectattr('warn_only')|list %}
+<section>
+  <h2>Review</h2>
+  <p class="lead">Numbers below are from the spec as uploaded{% if draft.assets %}, with your edits applied{% endif %}. Nothing goes to the client until you approve.</p>
+
+  <form method="post" action="/jobs/{{ j.id }}/edits">
+  {% for it in items %}
+    <div class="card asset">
+      <div class="asset-head">
+        <label class="grow">Asset name (sheet, model and annex)
+          <input name="name::{{ it.spec }}" value="{{ it.asset }}" maxlength="31" required></label>
+        {% set pv = check.files.preview[loop.index0].replace('\\', '/') %}
+        <a class="btn2" href="/jobs/{{ j.id }}/check/{{ pv[6:] if pv.startswith('check/') else pv }}" target="_blank">Open 3D preview</a>
+      </div>
+      <p class="muted small">From <code>{{ it.spec }}</code>.
+        Total: skin {{ fmt(it.totals.skin) }} m²{% if it.totals.void_removed %} (gross {{ fmt(it.totals.skin + it.totals.void_removed) }} less {{ fmt(it.totals.void_removed) }} atrium void removed){% endif %} · AAA BUA {{ fmt(it.totals.bua) }} m² · IPMS 1 {{ fmt(it.totals.ipms) }} m²
+        {% if it.report_bua %} · report BUA {{ fmt(it.report_bua) }} m² ({{ '%+.2f'|format((it.totals.skin / it.report_bua - 1) * 100) }}%){% endif %}</p>
+      <table class="tight">
+        <thead><tr><th>Level</th><th class="n">External skin</th><th class="n">Internal</th><th class="n">A2 walls</th><th class="n">A6 leftover</th>
+          <th class="n">Void removed</th><th class="n">AAA BUA</th><th class="n">IPMS 1</th></tr></thead>
+        <tbody>
+        {% for L in it.levels %}{% set s = it.sched[L.id] %}
+          <tr><td>{{ L.name }} <span class="muted">({{ L.id }})</span></td><td class="n">{{ fmt(s.skin) }}</td><td class="n">{{ fmt(s.internal) }}</td>
+            <td class="n {{ 'badtxt' if s.a2 < 0 }}">{{ fmt(s.a2) }}</td><td class="n {{ 'badtxt' if s.a6 < 0 }}">{{ fmt(s.a6) }}</td>
+            <td class="n">{{ fmt(s.void_removed) if s.void_removed else '' }}</td><td class="n">{{ fmt(s.bua) }}</td><td class="n">{{ fmt(s.ipms) }}</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      <p class="muted small">All figures m². A6 includes internal walls and columns plus small leftovers (closets, small shafts).</p>
+      {% if it.atrium %}
+      <fieldset class="atrium"><legend>Atrium void (B1.3): counted on one floor only</legend>
+        {% for L in it.atrium.levels %}
+          <label class="inline-opt"><input type="radio" name="atrium::{{ it.spec }}" value="{{ L.id }}" {{ 'checked' if L.id in it.atrium.counted }}> {{ L.name }}</label>
+        {% endfor %}
+        {% if it.atrium.counted|length != 1 %}<p class="badtxt small">The spec marks {{ it.atrium.counted|length }} floors as counted. Pick one.</p>{% endif %}
+        <p class="muted small">Normally the lowest floor it opens from. On the other floors it is removed from the floor area.</p>
+      </fieldset>
+      {% endif %}
+    </div>
+  {% endfor %}
+    <button class="btn2">Apply changes and re-check</button>
+  </form>
+
+  <h3 class="sub">Checks</h3>
+  {{ checktable(checks) }}
+
+  <h3 class="sub">Confirm before building</h3>
+  <form class="card confirm" method="post" action="/jobs/{{ j.id }}/approve">
+    <label class="tick"><input type="checkbox" name="ok::names" required>
+      <span>Asset names are right: <b>{{ items|map(attribute='asset')|join(', ') }}</b>.</span></label>
+    <label class="tick"><input type="checkbox" name="ok::a1" required>
+      <span>Notional boundary areas (A1) are excluded from AAA BUA, although the PTE report 2.11 ticks row A as counted.</span></label>
+    {% for it in items %}
+      {% if it.atrium %}
+      <label class="tick"><input type="checkbox" name="ok::atrium::{{ it.spec }}" required {{ 'disabled' if it.atrium.counted|length != 1 }}>
+        <span>{{ it.asset }}: atrium void counted on <b>{{ it.atrium.counted|join(', ') or 'no floor' }}</b>, removed from the other floors.</span></label>
+      {% endif %}
+      {% for c in it.calls %}
+      <label class="tick"><input type="checkbox" name="ok::{{ c.key }}" required>
+        <span>{{ it.asset }} · {{ c.level }} · <b>{{ c.name }}</b> ({{ fmt(c.area) }} m²). {{ c.rule }}
+          {% if c.note %}<br><span class="muted small">{{ c.note }}</span>{% endif %}</span></label>
+      {% endfor %}
+    {% endfor %}
+    {% if hard %}
+    <label class="reason">{{ hard|length }} check(s) failed. Fix the spec and upload it again, or give the reason to build anyway:
+      <textarea name="override_reason" rows="2" minlength="10" required placeholder="e.g. Report BUA includes the guard house, which is not in these drawings."></textarea></label>
+    {% endif %}
+    <button class="go">Approve and build</button>
+  </form>
+  <p><a href="/jobs/{{ j.id }}/log?which=check" target="_blank">Check log</a></p>
+</section>
+{% endif %}
+
+{% if review and stage == 'build' %}
+<section>
+  <h2>Approved review</h2>
+  <div class="card">
+    <p class="small">Approved by <b>{{ review.approver }}</b> on {{ review.approved_at }} UTC.</p>
+    <ul class="small">{% for c in review.confirmed %}<li>{{ c }}</li>{% endfor %}</ul>
+    {% if review.override_reason %}
+      <p class="small badtxt">Built with failed checks: {{ review.failed_checks|join('; ') }}.<br>Reason: {{ review.override_reason }}</p>
+    {% endif %}
+  </div>
+  {% if not busy %}
+  <form method="post" action="/jobs/{{ j.id }}/recheck"><button class="btn2">Revise (back to review; the next build is a new revision)</button></form>
+  {% endif %}
+</section>
+{% endif %}
+
+{% if j.status in ('queued', 'running') %}
+<p class="card">{{ 'Waiting for the worker…' if j.status == 'queued' else 'Building the workbook, models, offline copies and annex…' }} this page refreshes by itself.</p>
+{% endif %}
+
+{% if built %}
+<section>
+  <h2>Totals</h2>
+  <table>
+    <thead><tr><th>Asset</th><th class="n">External skin (m²)</th><th class="n">AAA BUA (m²)</th><th class="n">IPMS 1 (m²)</th><th class="n">Report BUA (m²)</th><th class="n">Skin vs report</th></tr></thead>
+    <tbody>
+    {% for a in built.assets %}
+      <tr><td>{{ a.asset }}</td><td class="n">{{ fmt(a.skin) }}</td><td class="n">{{ fmt(a.bua) }}</td>
+          <td class="n">{{ fmt(a.ipms) }}</td><td class="n">{{ fmt(a.report_bua) }}</td>
+          <td class="n">{{ '%+.2f%%'|format((a.skin / a.report_bua - 1) * 100) if a.report_bua else '' }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+
+{% if out and stage == 'build' %}
+<section>
+  <h2>Outputs</h2>
+  <ul class="files">
+  {% for f in out %}
+    {% if not f.endswith('.json') and not f.endswith('.png') %}
+    <li><a href="/jobs/{{ j.id }}/out/{{ f }}">{{ f }}</a>
+      {% if f.endswith('.html') %} · <a href="/jobs/{{ j.id }}/out/{{ f }}?view=1" target="_blank">open</a>{% endif %}</li>
+    {% endif %}
+  {% endfor %}
+  </ul>
+  <p class="muted small">Send the client the .zip: they unzip it and double-click the .html (no internet or account needed).</p>
+</section>
+{% endif %}
+
+{% if stage == 'build' and j.status != 'queued' %}
+<p><a href="/jobs/{{ j.id }}/log" target="_blank">Build log</a></p>
+{% endif %}
+{% endblock %}

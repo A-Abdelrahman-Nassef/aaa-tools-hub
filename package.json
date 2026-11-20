@@ -1,0 +1,10 @@
+{
+  "name": "aaa-tools-hub",
+  "private": true,
+  "description": "Offline libraries for the Areas Calculation model copies",
+  "dependencies": {
+    "three": "0.128.0",
+    "@fontsource/barlow": "5.0.13",
+    "@fontsource/barlow-condensed": "5.0.13"
+  }
+}

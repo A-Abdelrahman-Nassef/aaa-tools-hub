@@ -1,0 +1,269 @@
+{% extends "base.html" %}
+{% block title %}Job {{ j.id }} – AAA Tools Hub{% endblock %}
+{% block head %}{% if busy %}<meta http-equiv="refresh" content="2">{% endif %}{% endblock %}
+
+{% macro checks_table(rows) %}
+<table>
+  <thead><tr><th>Check</th><th>Detail</th><th>Result</th></tr></thead>
+  <tbody>
+  {% for c in rows %}
+    <tr class="{{ '' if c.ok else 'rb' }}"><td>{{ c.check }}</td><td class="muted small">{{ c.detail or '' }}</td>
+      <td>{% if c.ok %}<span class="ok">Pass</span>{% else %}<span class="bad">Fail</span>{% endif %}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endmacro %}
+
+{% block main %}
+{% set stage = 'setup' if j.status == 'setup' else ('review' if j.status in ('checking', 'review') or (j.status == 'failed' and m.review and not review) else 'build') %}
+<p class="crumb"><a href="/projects">Projects</a> / <a href="/projects/{{ p.id }}">{{ p.name }}</a> /</p>
+<h1>{{ job_name(j) }} <small>{{ j.rev }}</small></h1>
+<p><span class="st st-{{ j.status }}">{{ j.status.replace('_', ' ') }}</span>
+   {% if j.message %}<span class="msg">{{ j.message }}</span>{% endif %}</p>
+
+{% if j.status == 'done' and chainst.state in ('stale', 'waits') %}
+<div class="card warn-card">
+  <b>Out of date.</b> Since this step ran:
+  <ul class="small">{% for x in chainst.reasons %}<li>{{ x }}</li>{% endfor %}</ul>
+  {% if chainst.state == 'stale' and not chainst.waits_on %}
+  <form method="post" action="/jobs/{{ j.id }}/chain"><button class="go">Re-run with the current files, then update later steps</button>
+    <span class="muted small">Review steps stop for your approval, pre-filled with your previous choices.</span></form>
+  {% elif chainst.waits_on %}
+  <p class="small">Update the earlier step first: <a href="/jobs/{{ chainst.waits_on }}">job {{ chainst.waits_on }}</a>.</p>
+  {% endif %}
+</div>
+{% elif j.status == 'done' and later %}
+<div class="card warn-card">
+  <b>Later steps are out of date</b> after this step changed:
+  <ul class="small">{% for x in later %}<li><a href="/jobs/{{ x.id }}">{{ job_name(x) }}</a> (job {{ x.id }}, {{ x.rev }})</li>{% endfor %}</ul>
+  <form method="post" action="/jobs/{{ j.id }}/chain"><button class="go">Update later steps</button>
+    <span class="muted small">Runs them in order with the current files; review steps stop for your approval, pre-filled with your previous choices.</span></form>
+</div>
+{% endif %}
+{% if j.chain and j.status in ('checking', 'queued', 'running', 'review') %}
+<p class="card small">Part of an update after an earlier step changed{% if j.status == 'review' %}: approve the review below and the later steps carry on{% endif %}.</p>
+{% endif %}
+
+<ol class="steps">
+  <li class="{{ 'now' if stage == 'setup' else 'done' }}"><b>1 · Choose files</b><br>Project files of the kinds this step takes. Scripts only, no Claude.</li>
+  {% if m.review %}
+  <li class="{{ 'now' if stage == 'review' else ('done' if stage == 'build' else '') }}"><b>2 · Review</b><br>{{ m.review_step or 'Correct the suggested asset and package of each BOQ.' }}</li>
+  {% endif %}
+  <li class="{{ 'done' if j.status == 'done' else ('now' if stage == 'build' else '') }}"><b>{{ 3 if m.review else 2 }} · Run and check</b><br>
+    Results that pass their checks are added to the project's files as <i>{{ FILE_KINDS.get(m.output_kind, m.output_kind) }}</i>, ready for the next step.</li>
+</ol>
+<p class="lead small">{{ m.what }}</p>
+
+{% if stage == 'setup' %}
+<section>
+  <h2>Input files</h2>
+  {% if groups %}
+  <form class="card" method="post" action="/jobs/{{ j.id }}/run">
+    {% for kind, label, files in groups %}
+      <fieldset class="pick"><legend>{{ label }} ({{ files|length }})
+        <button type="button" class="link" onclick="for (const c of this.closest('fieldset').querySelectorAll('input')) c.checked = true">all</button>
+        <button type="button" class="link" onclick="for (const c of this.closest('fieldset').querySelectorAll('input')) c.checked = false">none</button></legend>
+        {% for f in files %}
+          <label class="tick"><input type="checkbox" name="f::{{ f.id }}" {{ 'checked' if f.id in chosen }}>
+            <span>{{ f.name }}{% if f.job_id %} <span class="muted small">(from job {{ f.job_id }})</span>{% endif %}</span></label>
+        {% endfor %}
+      </fieldset>
+    {% endfor %}
+    <button class="go">{{ 'Suggest names' if j.module == 'asset-names' else ('Read the files' if m.review else 'Run') }}</button>
+  </form>
+  {% else %}
+  <p class="card">The project has no files this step can take yet ({{ m.inputs|map('first')|map('replace', '-', ' ')|join(', ') }}).
+     Upload them on the <a href="/projects/{{ p.id }}">project page</a>{% if m.inputs[0][0] != 'boq' %}, or run the step before this one{% endif %}.</p>
+  {% endif %}
+</section>
+{% endif %}
+
+{% if j.status in ('checking', 'queued', 'running') %}
+<p class="card">{{ {'checking': 'Reading the files…', 'queued': 'Waiting for the worker…', 'running': 'Running…'}[j.status] }}
+  this page refreshes by itself.</p>
+{% endif %}
+
+{% if rows is not none and stage == 'review' and j.module == 'name-assets' %}
+<section id="review">
+  <h2>Review</h2>
+  <p class="lead">From <b>{{ check.master }}</b> ({{ check.tabs|length }} asset tabs) and the register. Each name becomes a tab
+    name and the name in Schedule of Assets, Asset Summary, Project Summary and the Elemental Summary. Nothing is built until you approve.</p>
+  {% if problems %}<div class="card bad-card"><b>Fix before approving:</b><ul class="small">{% for x in problems %}<li>{{ x }}</li>{% endfor %}</ul></div>{% endif %}
+  {% if check.checks %}{{ checks_table(check.checks) }}{% endif %}
+  <form method="post" action="/jobs/{{ j.id }}/master">
+    {% set extra = 2 %}
+    <input type="hidden" name="count" value="{{ rows|length + extra }}">
+    <table class="tight">
+      <thead><tr><th>Tab</th><th>Asset name</th><th>BOQ codes from the register (column B when step 05 loads)</th></tr></thead>
+      <tbody>
+      {% for r in rows %}
+        <tr><td class="muted small">{{ check.tabs[loop.index0] if loop.index0 < check.tabs|length else '' }}</td>
+          <td><input name="name::{{ loop.index0 }}" value="{{ r.name }}" maxlength="31" class="cell"></td>
+          <td class="small">{{ (check['items'][loop.index0].packages if loop.index0 < check['items']|length else [])|join(', ') }}</td></tr>
+      {% endfor %}
+      {% for i in range(extra) %}{% set k = rows|length + i %}
+        <tr><td class="muted small">{{ check.tabs[k] if k < check.tabs|length else '' }}</td>
+          <td><input name="name::{{ k }}" value="" maxlength="31" class="cell" placeholder="add an asset"></td>
+          <td></td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <p class="muted small">Clear a name to drop that asset. Each asset tab stays one block of divisions; every loaded
+      line carries its BOQ code in column B (Client Code). Two BOQs of one asset with the same code are numbered in the
+      register: Arch -1, Arch -2.</p>
+    <fieldset class="pick"><legend>Spare Asset tabs ({{ check.tabs|length - rows|length }} not used)</legend>
+      <label class="tick"><input type="radio" name="spare" value="delete" {{ 'checked' if check.options.delete_spare }}>
+        <span>Delete them, with their rows in the Schedule and summaries and their Elemental columns</span></label>
+      <label class="tick"><input type="radio" name="spare" value="keep" {{ '' if check.options.delete_spare else 'checked' }}>
+        <span>Keep them as empty spares (linked, adding zero)</span></label>
+    </fieldset>
+    <fieldset class="pick"><legend>The Elemental Summary (NRM01) reads</legend>
+      <label class="tick"><input type="radio" name="amount" value="pte" {{ 'checked' if check.options.amount == 'pte' }}>
+        <span>Pre-Tender Estimate (AAA quantities), as the template does</span></label>
+      <label class="tick"><input type="radio" name="amount" value="est" {{ 'checked' if check.options.amount == 'est' }}>
+        <span>Estimated Amount (Designer quantities)</span></label>
+    </fieldset>
+    {% if check.defects %}
+    <h3 class="sub">Found in the master</h3>
+    <ul class="small">{% for n in check.defects %}<li>{{ n }}</li>{% endfor %}</ul>
+    {% endif %}
+    {% if check.notes %}<ul class="small">{% for n in check.notes %}<li>{{ n }}</li>{% endfor %}</ul>{% endif %}
+    <p class="row">
+      <button class="btn2" name="action" value="save">Save changes</button>
+      <button class="go" name="action" value="approve" {{ 'disabled' if problems or check.checks }}>Approve and build the master</button>
+    </p>
+  </form>
+  <form method="post" action="/jobs/{{ j.id }}/setup"><button class="link nav">Back to choosing files</button></form>
+  <p><a href="/jobs/{{ j.id }}/log?which=check" target="_blank">Check log</a></p>
+</section>
+{% elif rows is not none and stage == 'review' and j.module == 'load-boq' %}
+<section id="review">
+  <h2>Review</h2>
+  <p class="lead">{{ check.summary }}, into <b>{{ check.master }}</b>. Nothing is loaded until you approve.</p>
+  {% if check.checks %}{{ checks_table(check.checks) }}{% endif %}
+  {% if problems %}<div class="card bad-card"><b>Fix before approving:</b><ul class="small">{% for x in problems %}<li>{{ x }}</li>{% endfor %}</ul></div>{% endif %}
+  <h3 class="sub">BOQs (from the register)</h3>
+  <table class="tight">
+    <thead><tr><th>Asset tab</th><th>Code</th><th class="n">Priced lines</th><th class="n">Text lines</th><th class="n">Designer QTY</th><th>BOQ</th></tr></thead>
+    <tbody>{% for r in rows %}<tr><td>{{ r.asset }}</td><td>{{ r.package }}</td><td class="n">{{ r['items'] if r['items'] is not none else '' }}</td>
+      <td class="n">{{ r.headings if r.headings is not none else '' }}</td><td class="n">{{ '{:,.2f}'.format(r.qty) if r.qty is not none else '' }}</td>
+      <td class="small">{{ r.file }}</td></tr>{% endfor %}</tbody>
+  </table>
+  <form method="post" action="/jobs/{{ j.id }}/load">
+    <h3 class="sub">Division mapping</h3>
+    <p class="muted small">Each BOQ division goes to the master division with this number in the asset's tab; its lines carry the BOQ code in column B.
+      Master divisions: {% for m_ in check.master_divs %}{{ '%02d'|format(m_.num) }}{{ ', ' if not loop.last }}{% endfor %}.</p>
+    <table class="tight">
+      <thead><tr><th>Package</th><th>BOQ division</th><th class="n">BOQs</th><th>Master division</th><th>Why</th></tr></thead>
+      <tbody>{% for x in check.divmap %}
+        <tr><td>{{ x.package }}</td><td class="small">{{ x.label }}</td><td class="n">{{ x.boqs }}</td>
+          <td><input name="div::{{ loop.index0 }}" value="{{ x.num if x.num is not none else '' }}" class="cell" style="max-width:70px"></td>
+          <td class="muted small">{{ x.why }}</td></tr>{% endfor %}</tbody>
+    </table>
+    {% if check.notes %}<h3 class="sub">Worth checking</h3><ul class="small">{% for n in check.notes %}<li>{{ n }}</li>{% endfor %}</ul>{% endif %}
+    <p class="row">
+      <button class="btn2" name="action" value="save">Save changes</button>
+      <button class="go" name="action" value="approve" {{ 'disabled' if problems or check.checks }}>Approve and load</button>
+    </p>
+  </form>
+  <form method="post" action="/jobs/{{ j.id }}/setup"><button class="link nav">Back to choosing files</button></form>
+  <p><a href="/jobs/{{ j.id }}/log?which=check" target="_blank">Check log</a></p>
+</section>
+{% elif rows is not none and stage == 'review' %}
+<section id="review">
+  <h2>Review</h2>
+  {% set editing = built and built.stage == 'build' %}
+  {% if editing %}<p class="card">Editing the approved <b>{{ j.rev }}</b> register. Approving builds the next revision
+    (R{{ '%02d'|format(j.rev[1:]|int + 1) }}) and replaces the register in the project's files; the BOQs are not read again.</p>{% endif %}
+  <p class="lead">Suggested from each file name. For each BOQ, choose whether it covers a <b>whole asset</b> or is a
+    <b>package of an asset</b>, and give the package code (Arch, Elec, Plum…). A whole-asset BOQ gets the code
+    <b>Whole</b>, in the register and in column B (Client Code) when step 05 loads it. The register is built only when you approve.</p>
+  {% if problems %}<div class="card bad-card"><b>Fix before approving:</b><ul class="small">{% for x in problems %}<li>{{ x }}</li>{% endfor %}</ul></div>{% endif %}
+  {% if warnings %}<div class="card warn-card"><b>Worth checking:</b><ul class="small">{% for x in warnings %}<li>{{ x }}</li>{% endfor %}</ul></div>{% endif %}
+  <form method="post" action="/jobs/{{ j.id }}/names">
+    <table class="tight">
+      <thead><tr><th>#</th><th>File</th><th>Asset</th><th>BOQ covers</th><th>Package code</th><th>How it was read</th></tr></thead>
+      <tbody>
+      {% for r in rows %}{% set i = loop.index0 %}
+        <tr><td>{{ loop.index }}<input type="hidden" name="file::{{ i }}" value="{{ r.file }}"></td><td class="small">{{ r.file }}</td>
+          <td><input name="asset::{{ i }}" value="{{ r.asset }}" maxlength="31" class="cell"></td>
+          <td><select name="scope::{{ i }}" class="cell scope" data-i="{{ i }}">
+                <option value="package" {{ 'selected' if r.scope != 'whole' }}>Package of an asset</option>
+                <option value="whole" {{ 'selected' if r.scope == 'whole' }}>Whole asset</option></select></td>
+          <td><input name="package::{{ i }}" id="pkg-{{ i }}" value="{{ r.package }}" maxlength="31" class="cell"
+                     {{ 'readonly' if r.scope == 'whole' }} placeholder="Arch, Elec, Plum…"></td>
+          <td class="muted small">{{ r.how }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <script>
+      for (const s of document.querySelectorAll('select.scope')) s.addEventListener('change', () => {
+        const p = document.getElementById('pkg-' + s.dataset.i);
+        if (s.value === 'whole') { p.dataset.was = p.value; p.value = 'Whole'; p.readOnly = true; }
+        else { p.readOnly = false; p.value = /^whole( -\d+)?$/i.test(p.value) ? (p.dataset.was || '') : p.value;
+               if (/^whole/i.test(p.value)) p.value = ''; p.focus(); }
+      });
+    </script>
+    {% if check.notes %}
+    <h3 class="sub">Worth checking</h3>
+    <ul class="small">{% for n in check.notes %}<li>{{ n }}</li>{% endfor %}</ul>
+    {% endif %}
+    <p class="row">
+      <button class="btn2" name="action" value="save">Save changes</button>
+      <button class="go" name="action" value="approve" {{ 'disabled' if problems }}>Approve and build the {{ 'next revision' if editing else 'register' }}</button>
+    </p>
+  </form>
+  {% if editing %}
+  <form method="post" action="/jobs/{{ j.id }}/names/cancel"><button class="link nav">Cancel editing (keep the {{ j.rev }} register)</button></form>
+  {% else %}
+  <form method="post" action="/jobs/{{ j.id }}/setup"><button class="link nav">Back to choosing files</button></form>
+  {% endif %}
+  <p><a href="/jobs/{{ j.id }}/log?which=check" target="_blank">Check log</a></p>
+</section>
+{% endif %}
+
+{% if stage == 'review' and j.status == 'failed' %}
+<p class="card bad-card">The files could not be read: <code>{{ j.message }}</code>. <a href="/jobs/{{ j.id }}/log?which=check" target="_blank">Check log</a></p>
+<form method="post" action="/jobs/{{ j.id }}/setup"><button class="btn2">Back to choosing files</button></form>
+{% endif %}
+
+{% if built and stage == 'build' and j.status not in ('queued', 'running') %}
+<section>
+  <h2>Result</h2>
+  <p class="lead">{{ built.summary }}</p>
+  {% if review %}<p class="muted small">Built from the review approved on {{ review.approved_at }} UTC.</p>{% endif %}
+  {% if built.rows %}
+  <table class="tight">
+    <thead><tr>{% for c in built.columns %}<th>{{ c }}</th>{% endfor %}</tr></thead>
+    <tbody>{% for r in built.rows %}<tr>{% for v in r %}<td>{{ v }}</td>{% endfor %}</tr>{% endfor %}</tbody>
+  </table>
+  {% endif %}
+  {% if built.checks %}<h3 class="sub">Checks</h3>{{ checks_table(built.checks) }}{% endif %}
+  {% if built.notes %}
+  <h3 class="sub">Worth reporting</h3>
+  <ul class="small">{% for n in built.notes %}<li>{{ n }}</li>{% endfor %}</ul>
+  {% endif %}
+  {% if built.publish or extra %}
+  <h3 class="sub">Outputs</h3>
+  <ul class="files">
+    {% for f in extra %}<li><a href="/jobs/{{ j.id }}/out/{{ f }}">{{ f }}</a> <span class="muted small">({{ 'all of them' if f.endswith('.zip') else 'report' }})</span></li>{% endfor %}
+    {% for x in built.publish %}<li><a href="/jobs/{{ j.id }}/out/{{ x.file }}">{{ x.file.split('/')[-1] }}</a></li>{% endfor %}
+  </ul>
+  {% if j.status == 'done' and built.publish %}<p class="muted small">Also added to the <a href="/projects/{{ p.id }}">project's files</a> as {{ FILE_KINDS.get(m.output_kind, m.output_kind) }}.</p>{% endif %}
+  {% endif %}
+</section>
+{% endif %}
+
+{% if stage == 'build' and j.status == 'failed' and not built %}
+<p class="card bad-card">The step failed: <code>{{ j.message }}</code>.</p>
+{% endif %}
+
+{% if stage == 'build' and not busy and j.module == 'asset-names' and j.status == 'done' and review %}
+<form method="post" action="/jobs/{{ j.id }}/names/edit"><button class="go">Edit the register</button>
+  <span class="muted small">Change assets, whole / package and codes; approving builds the next revision.</span></form>
+{% endif %}
+{% if stage == 'build' and not busy %}
+<form method="post" action="/jobs/{{ j.id }}/setup"><button class="btn2">Run again with other files (next revision)</button></form>
+<p><a href="/jobs/{{ j.id }}/log" target="_blank">Run log</a></p>
+{% endif %}
+{% endblock %}

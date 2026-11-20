@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% block title %}{{ p.name }} – AAA Tools Hub{% endblock %}
+{% block main %}
+<p class="crumb"><a href="/projects">Projects</a> /</p>
+<h1>{{ p.name }}{% if p.archived %} <span class="st st-failed">archived</span>{% endif %}</h1>
+{% if p.client %}<p class="lead">{{ p.client }}</p>{% endif %}
+{% if p.archived %}<p class="card warn-card">This project is <b>archived</b>: hidden from everyone's project list and read-only
+  (no uploads, new jobs or runs). Restore it, or delete it for good, in the Danger zone at the bottom.</p>{% endif %}
+{% if request.query_params.get('saved') %}<p class="card ok-card">Project details saved.</p>{% endif %}
+<details class="card naming" id="details">
+  <summary>Project details · output files are named <code>{{ name_example }}</code></summary>
+  <form class="row" method="post" action="/projects/{{ p.id }}/details">
+    <label>Project name <input id="pd-name" name="name" value="{{ p.name }}" required maxlength="120"></label>
+    <label>Client <input id="pd-client" name="client" value="{{ p.client or '' }}" maxlength="120"></label>
+    <label>Short name for files <input id="pd-short" name="short_name" value="{{ p.short_name or '' }}" placeholder="{{ p.name }}"></label>
+    <button>Save</button>
+  </form>
+  <p class="muted small">Created {{ p.created[:10] }}{% if creator %} by {{ creator }}{% endif %}. Output files are named
+    Date - Client - Project - Task - Rev.nn - Initials, where Project is the short name (or the project name when it is empty).
+    Files already made keep their names; the next output of each step uses the new details. The Rev counts up for every new
+    file of a task in this project. Your initials are set on your <a href="/account">account page</a>. BOQ files keep their own names.</p>
+</details>
+<details class="card naming" id="members">
+  <summary>People on this project: {{ members|map(attribute='name')|join(', ') or 'nobody yet' }}
+    <span class="muted small">(admins see every project)</span></summary>
+  <table class="tight">
+    <tbody>
+    {% for m in members %}
+      <tr><td>{{ m.name }}{% if m.is_admin %} <span class="muted small">admin</span>{% endif %}</td><td class="muted small">{{ m.email }}</td>
+        <td>{% if u.is_admin %}<form method="post" action="/projects/{{ p.id }}/members" class="inline"
+              onsubmit="return confirm('Remove this person from the project? They will no longer see it.')">
+            <input type="hidden" name="user_id" value="{{ m.id }}"><button class="link" name="action" value="remove">Remove</button></form>{% endif %}</td></tr>
+    {% else %}
+      <tr><td class="muted">Nobody yet.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% if u.is_admin and others %}
+  <form class="row" method="post" action="/projects/{{ p.id }}/members">
+    <label>Add a person <select name="user_id">{% for o in others %}<option value="{{ o.id }}">{{ o.name }} ({{ o.email }})</option>{% endfor %}</select></label>
+    <button name="action" value="add">Add</button>
+  </form>
+  {% endif %}
+  <p class="muted small">Only the people listed here (and admins) can see this project, its files and its jobs.
+    {% if not u.is_admin %}Ask an admin to add someone.{% endif %}</p>
+</details>
+
+<section>
+  <h2>Jobs</h2>
+  <table>
+    <thead><tr><th>#</th><th>Module</th><th>Rev</th><th>Status</th><th>Result</th><th>Created</th></tr></thead>
+    <tbody>
+    {% for j in jobs %}
+      <tr><td><a href="/jobs/{{ j.id }}">{{ j.id }}</a></td><td><a href="/jobs/{{ j.id }}">{{ job_name(j) }}</a></td><td>{{ j.rev }}</td>
+          <td><span class="st st-{{ j.status }}">{{ j.status.replace('_', ' ') }}</span>
+            {% set cs = chainst.get(j.id) %}{% if cs and cs.state in ('stale', 'waits') %}<a href="/jobs/{{ j.id }}" class="st st-stale" title="{{ cs.reasons|join('; ') }}">out of date</a>{% endif %}</td>
+          <td class="msg">{{ j.message or '' }}</td><td>{{ j.created[:16] }}</td></tr>
+    {% else %}
+      <tr><td colspan="6" class="muted">No jobs yet.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section id="files">
+  <h2>Files</h2>
+  {% set here = (folders | selectattr('kind', 'equalto', folder) | first) if folder else None %}
+  <p class="crumb folder-path">
+    {% if here %}<a href="/projects/{{ p.id }}#files">All folders</a> / <b>{{ here.label }}</b>
+    {% else %}<b>All folders</b> <span class="muted">· {{ nfiles }} file(s) in {{ folders|length }} folder(s)</span>{% endif %}
+  </p>
+  {% if here %}
+  <table>
+    <thead><tr><th>File</th><th>Kind</th><th class="n">Size</th><th>Added</th></tr></thead>
+    <tbody>
+      <tr class="up"><td colspan="4"><a href="/projects/{{ p.id }}#files">&larr; Back to all folders</a></td></tr>
+    {% for f in files %}
+      <tr><td><a href="/projects/{{ p.id }}/files/{{ f.id }}">{{ f.name }}</a></td><td>{{ FILE_KINDS.get(f.kind, f.kind) }}</td>
+          <td class="n">{{ '%.2f'|format(f.size / 1048576) }} MB</td>
+          <td>{{ f.created[:16] }}{% if f.job_id %} · <a href="/jobs/{{ f.job_id }}">job {{ f.job_id }}</a>{% endif %}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <table>
+    <thead><tr><th>Folder</th><th class="n">Files</th><th class="n">Size</th><th>Last added</th></tr></thead>
+    <tbody>
+    {% for g in folders %}
+      <tr><td><a class="folder" href="/projects/{{ p.id }}?folder={{ g.kind }}#files">{{ g.label }}</a></td>
+          <td class="n">{{ g.count }}</td><td class="n">{{ '%.2f'|format(g.size / 1048576) }} MB</td><td>{{ g.last[:16] }}</td></tr>
+    {% else %}
+      <tr><td colspan="4" class="muted">No files yet.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+  <form class="card row" method="post" action="/projects/{{ p.id }}/files" enctype="multipart/form-data">
+    <label>Files <input type="file" name="files" multiple required></label>
+    <label>Kind
+      <select name="kind">
+        {% for k in UPLOAD_KINDS %}<option value="{{ k }}" {{ 'selected' if k == folder }}>{{ FILE_KINDS[k] }}</option>{% endfor %}
+      </select>
+    </label>
+    <button>Upload</button>
+  </form>
+</section>
+
+<section>
+  <h2>Modules</h2>
+  <div class="mods">
+  {% for key, m in MODULES.items() %}
+    <form class="mod {{ '' if m.ready else 'off' }}" method="post" action="/projects/{{ p.id }}/jobs">
+      <input type="hidden" name="module" value="{{ key }}">
+      <h3>{{ m.name }}</h3>
+      <p>{{ m.desc }}</p>
+      {% if m.ready %}<button>New job</button>{% else %}<span class="muted">Coming later</span>{% endif %}
+    </form>
+  {% endfor %}
+  </div>
+</section>
+
+{% if u.is_admin %}
+<section class="danger">
+  <h2>Danger zone</h2>
+  <div class="card row">
+    {% if p.archived %}
+      <form method="post" action="/projects/{{ p.id }}/restore"><button class="btn2">Restore project</button></form>
+      <span class="muted small">Back in the project list for its people, and editable again.</span>
+    {% else %}
+      <form method="post" action="/projects/{{ p.id }}/archive"
+            onsubmit="return confirm('Archive this project? It disappears from every list and becomes read-only. Nothing is deleted; an admin can restore it.')">
+        <button class="btn2">Archive project</button></form>
+      <span class="muted small">For a finished project: hidden from every list and read-only. Nothing is deleted; you can restore it.</span>
+    {% endif %}
+  </div>
+  <form class="card row" method="post" action="/projects/{{ p.id }}/delete"
+        onsubmit="return confirm('Delete this project and everything in it for good? This cannot be undone.')">
+    <p class="full"><b>Delete permanently.</b> Removes {{ size.files }} file(s), {{ size.jobs }} job(s) and their outputs
+      ({{ '%.1f'|format(size.mb) }} MB on disk), and the list of people. This <b>cannot be undone</b>. Logged AI costs stay in the
+      Costs history.</p>
+    <label>Type the project name to confirm: <b>{{ p.name }}</b>
+      <input name="confirm_name" autocomplete="off" required data-name="{{ p.name }}"
+             oninput="this.form.querySelector('button').disabled = this.value !== this.dataset.name"></label>
+    <button class="del" disabled>Delete project</button>
+  </form>
+</section>
+{% endif %}
+{% endblock %}

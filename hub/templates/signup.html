@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Sign up – AAA Tools Hub{% endblock %}
+{% block main %}
+<form class="card narrow" method="post" action="/signup">
+  <h1>Sign up</h1>
+  {% if domain %}<p class="muted small">Use your <b>@{{ domain }}</b> work email. An admin approves new accounts before
+    you can use the hub.</p>{% endif %}
+  {% if error %}<p class="err">{{ error }}</p>{% endif %}
+  <label>Full name <input name="name" value="{{ f.name or '' }}" autocomplete="name" required autofocus></label>
+  <label>Work email <input name="email" type="email" value="{{ f.email or '' }}" autocomplete="username" required
+         {% if domain %}placeholder="name@{{ domain }}"{% endif %}></label>
+  <label>Password <input name="password" type="password" autocomplete="new-password" minlength="10" required></label>
+  <label>Confirm password <input name="password2" type="password" autocomplete="new-password" minlength="10" required></label>
+  <p class="muted small">At least 10 characters.</p>
+  <button>Sign up</button>
+  <p class="muted small auth-alt">Already have an account? <a href="/login">Sign in</a></p>
+</form>
+{% endblock %}

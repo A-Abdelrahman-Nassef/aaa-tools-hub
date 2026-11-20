@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block main %}
+<h1>{{ 'Archived projects' if archived else 'Projects' }}</h1>
+{% if request.query_params.get('deleted') %}<p class="card ok-card">Project "{{ request.query_params.get('deleted') }}" was deleted.</p>{% endif %}
+<p class="lead">{% if archived %}Hidden from everyone's list and read-only. Open one to restore or delete it.
+  <a href="/projects">Back to projects</a>{% else %}Upload a project's files once; every module runs from them.
+  {% if n_arch %}<a href="/projects?archived=1">Archived ({{ n_arch }})</a>{% endif %}{% endif %}</p>
+<table>
+  <thead><tr><th>Project</th><th>Client</th><th class="n">Files</th><th class="n">Jobs</th>
+    {% if u.is_admin %}<th class="n">Total AI Cost (USD)</th>{% endif %}<th>Created</th></tr></thead>
+  <tbody>
+  {% for p in projects %}
+    <tr><td><a href="/projects/{{ p.id }}">{{ p.name }}</a></td><td>{{ p.client or '' }}</td>
+        <td class="n">{{ p.nfiles }}</td><td class="n">{{ p.njobs }}</td>
+        {% if u.is_admin %}<td class="n"><a href="/costs" class="plain">${{ '{:,.2f}'.format(p.ai_usd) }}</a>
+          {% if p.sample_usd %}<br><span class="muted small" title="Sample entries on the Costs page, not counted">+ ${{ '{:,.2f}'.format(p.sample_usd) }} sample</span>{% endif %}</td>{% endif %}
+        <td>{{ p.created[:10] }}</td></tr>
+  {% else %}
+    <tr><td colspan="6" class="muted">{{ 'No archived projects.' if archived else 'No projects yet.' }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% if not archived %}
+<form class="card row" method="post" action="/projects">
+  <h2>New project</h2>
+  <label>Name <input name="name" required placeholder="Sample Compound"></label>
+  <label>Client <input name="client" placeholder="Sample Developer"></label>
+  <label>Short name for files <input name="short_name" placeholder="DEMO"></label>
+  <button>Create</button>
+</form>
+{% endif %}
+{% endblock %}

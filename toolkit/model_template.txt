@@ -1,0 +1,577 @@
+<title>__PAGETITLE__</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700&display=swap">
+<style>
+/* Layout: one-screen tool. Mode bar on top, 3D stage left with level chips and view tools, area ledger right; stacks on phones. */
+:root{
+  --bg:#E9ECEF; --surface:#FFFFFF; --ink:#1E242B; --muted:#56616C; --line:#CBD1D7; --soft:#F3F5F7;
+  --stage:#DFE4E9; --ghost:#C3CAD2; --edge:#1E242B; --ground:#C9D1D8;
+  --skin:#3FA27B; --bua:#4F7CC0; --ipms:#E39A2F; --red:#D23A2E; --sel:#C7317F;
+  --f-display:'Barlow Condensed','Arial Narrow',Arial,sans-serif;
+  --f-body:Barlow,'Helvetica Neue',Arial,sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#12161A; --surface:#191E24; --ink:#E4E8EC; --muted:#9AA5B0; --line:#2B333B; --soft:#1F252C;
+  --stage:#161B20; --ghost:#3A434D; --edge:#C9D1D8; --ground:#232A31;
+  --skin:#4DB88E; --bua:#6B97DD; --ipms:#EEA845; --red:#E5574B; --sel:#E2589E; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#12161A; --surface:#191E24; --ink:#E4E8EC; --muted:#9AA5B0; --line:#2B333B; --soft:#1F252C;
+  --stage:#161B20; --ghost:#3A434D; --edge:#C9D1D8; --ground:#232A31;
+  --skin:#4DB88E; --bua:#6B97DD; --ipms:#EEA845; --red:#E5574B; --sel:#E2589E; color-scheme:dark}
+*,*::before,*::after{box-sizing:border-box}
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:14px;line-height:1.45;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  display:flex;flex-direction:column}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--red);outline-offset:2px}
+
+.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:10px 24px;padding-block:14px 12px}
+.eyebrow{font-family:var(--f-display);font-weight:600;font-size:12.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+h1{font-family:var(--f-display);font-weight:700;font-size:clamp(24px,3.2vw,32px);line-height:1;margin:4px 0 0;text-wrap:balance}
+.seg{display:flex;flex-wrap:wrap;gap:3px;background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:3px}
+.seg button{border:0;background:transparent;padding:7px 11px;border-radius:6px;font-weight:600;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:7px;color:var(--muted)}
+.seg button:hover{color:var(--ink)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--surface)}
+.dot{width:10px;height:10px;border-radius:2px;flex:none}
+.dot.multi{background:conic-gradient(#AFCBEE 0 25%,#C3B6E2 0 50%,#F2BE82 0 75%,#B3DBA5 0)}
+
+.app{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 410px;gap:14px;padding-block:0 16px}
+.stage{position:relative;min-height:0;border-radius:10px;overflow:hidden;background:var(--stage);border:1px solid var(--line)}
+#cv{display:block;width:100%;height:100%;touch-action:none;cursor:grab}
+#cv.hot{cursor:pointer}
+#labels{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.lvl{position:absolute;transform:translate(-100%,-50%);font-family:var(--f-display);font-size:13px;font-weight:700;color:var(--ink);
+  padding:1px 6px;border-radius:4px;background:color-mix(in srgb,var(--surface) 82%,transparent);white-space:nowrap}
+.rl{position:absolute;transform:translate(-50%,-50%);text-align:center;white-space:nowrap;font-size:11px;line-height:1.2;color:#1E242B;
+  padding:1px 5px;border-radius:3px;background:rgba(255,255,255,.82)}
+.rl b{display:block;font-weight:600;font-size:11.5px}
+.rl.sm{font-weight:700;font-size:10px;padding:0 3px}
+.levels{position:absolute;top:10px;left:10px;display:flex;flex-wrap:wrap;gap:4px;max-width:calc(100% - 20px)}
+.levels button{border:1px solid var(--line);background:var(--surface);border-radius:6px;padding:4px 9px;font-family:var(--f-display);font-weight:700;font-size:13px;cursor:pointer;letter-spacing:.02em}
+.levels button[aria-pressed="true"]{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+.tools{position:absolute;right:10px;bottom:10px;display:flex;flex-direction:column;gap:5px;align-items:flex-end}
+.tool{background:var(--surface);border:1px solid var(--line);border-radius:7px;padding:6px 10px;font-size:12px;font-weight:600;cursor:pointer;min-width:118px;text-align:left}
+.tool[aria-pressed="true"]{border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink)}
+.legend{position:absolute;left:10px;bottom:10px;display:flex;flex-direction:column;gap:3px;max-width:calc(100% - 160px);
+  background:color-mix(in srgb,var(--surface) 90%,transparent);border:1px solid var(--line);border-radius:7px;padding:7px 9px}
+.legend div{display:flex;align-items:center;gap:7px;font-size:12px}
+.legend.grid{display:grid;grid-template-columns:auto auto;column-gap:14px}
+.legend.grid .wide{grid-column:1/-1}
+.legend .ln{width:18px;height:0;border-top:2.5px solid var(--red);flex:none}
+.legend .ln.d{border-top-style:dashed}
+.hatch{background-image:repeating-linear-gradient(45deg,transparent 0 3px,rgba(0,0,0,.4) 3px 4.5px)}
+.hint{position:absolute;right:10px;top:12px;margin:0;font-size:12px;color:var(--muted)}
+
+.panel{min-height:0;overflow:auto;display:flex;flex-direction:column;gap:12px}
+.scope{font-family:var(--f-display);font-weight:600;font-size:12.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.totals{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.tot{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:9px 10px;cursor:pointer;text-align:left;display:flex;flex-direction:column;gap:3px;min-width:0}
+.tot[aria-pressed="true"]{border-color:var(--c);box-shadow:inset 0 0 0 1.5px var(--c)}
+.tot small{font-size:11.5px;font-weight:600;color:var(--muted);display:flex;align-items:center;gap:6px}
+.tot strong{font-family:var(--f-display);font-size:21px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.05}
+.tot strong i{font-style:normal;font-size:12px;color:var(--muted);font-weight:500;margin-left:2px}
+
+.info{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:13px 15px;display:flex;flex-direction:column;gap:8px}
+.info .k{font-family:var(--f-display);font-size:12px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);display:flex;gap:8px;align-items:center}
+.code{font-family:var(--f-display);font-weight:700;font-size:12px;padding:1px 6px;border-radius:3px;color:#1E242B}
+.info h2{font-family:var(--f-display);font-size:21px;font-weight:700;margin:0;line-height:1.1;text-wrap:balance}
+.big{font-family:var(--f-display);font-size:30px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1}
+.big i{font-style:normal;font-size:14px;color:var(--muted);font-weight:500;margin-left:3px}
+.big small{font-family:var(--f-body);font-size:12.5px;color:var(--muted);font-weight:400;margin-left:8px}
+.info p{margin:0;color:var(--muted);max-width:60ch}
+.chips{display:flex;flex-wrap:wrap;gap:5px}
+.chip{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;border-radius:999px;padding:2px 10px 2px 8px;border:1px solid var(--line)}
+.chip.yes{border-color:var(--c)}
+.chip.no{color:var(--muted);text-decoration:line-through}
+.lv{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.lv div{background:var(--soft);padding:5px 6px;display:flex;flex-direction:column;gap:1px}
+.lv span{font-family:var(--f-display);font-weight:600;font-size:11px;letter-spacing:.06em;color:var(--muted)}
+.lv b{font-weight:600;font-size:12.5px;font-variant-numeric:tabular-nums}
+.flow{display:flex;flex-direction:column;gap:5px}
+.flow div{display:grid;grid-template-columns:12px 1fr auto;gap:8px;align-items:center;font-size:13px}
+.flow div.eq{font-weight:700;border-top:1px solid var(--line);padding-top:5px}
+.flow b{font-variant-numeric:tabular-nums;font-weight:600}
+
+.ledger{background:var(--surface);border:1px solid var(--line);border-radius:8px;overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
+th,td{padding:5px 8px;text-align:left;border-bottom:1px solid var(--line)}
+th{font-family:var(--f-display);font-size:11.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);font-weight:600;position:sticky;top:0;background:var(--surface)}
+th.n,td.n{text-align:right}
+td.m,th.m{text-align:center;width:44px}
+td.c{width:42px;font-weight:600;color:var(--muted);white-space:nowrap}
+tbody tr{cursor:pointer}
+tbody tr:hover{background:var(--soft)}
+tbody tr.g td{font-weight:700;background:var(--soft)}
+tbody tr.g td.c{color:var(--ink)}
+tbody tr.sel{box-shadow:inset 3px 0 0 var(--red);background:color-mix(in srgb,var(--red) 10%,var(--surface))}
+.sw{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:6px;vertical-align:0}
+.mk{display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--c)}
+.mk.no{background:transparent;border:1.5px solid var(--line)}
+tfoot td{font-weight:700;border-bottom:0}
+tfoot tr.b td:nth-child(2){color:var(--bua)} tfoot tr.i td:nth-child(2){color:var(--ipms)} tfoot tr.s td:nth-child(2){color:var(--skin)}
+.note{margin:0;font-size:12px;color:var(--muted);max-width:62ch}
+
+@media (max-width:980px){
+  html,body{height:auto}
+  .app{grid-template-columns:1fr}
+  .stage{height:62vh;min-height:420px}
+  .panel{overflow:visible}
+  .hint{display:none}
+}
+@media (max-width:520px){
+  .seg{width:100%}
+  .seg button{flex:1 1 auto;justify-content:center;padding:7px 6px;font-size:12px}
+  .legend{display:none}
+  .tot strong{font-size:17px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style><header class="top">
+  <div>
+    <div class="eyebrow">__EYEBROW__</div>
+    <h1>__ASSET__ · AAA BUA and IPMS 1</h1>
+  </div>
+  <div class="seg" id="modes" role="group" aria-label="Colour the model by">
+    <button id="m-compare" data-mode="compare" aria-pressed="true">Compare</button>
+    <button id="m-comp" data-mode="comp" aria-pressed="false"><span class="dot multi"></span>Components</button>
+    <button id="m-skin" data-mode="skin" aria-pressed="false"><span class="dot" style="background:var(--skin)"></span>Ext. skin</button>
+    <button id="m-bua" data-mode="bua" aria-pressed="false"><span class="dot" style="background:var(--bua)"></span>AAA BUA</button>
+    <button id="m-ipms" data-mode="ipms" aria-pressed="false"><span class="dot" style="background:var(--ipms)"></span>IPMS 1</button>
+  </div>
+</header>
+
+<main class="app">
+  <section class="stage" id="stage">
+    <canvas id="cv" aria-label="3D model of __ASSET__, all levels, coloured by area measurement"></canvas>
+    <div id="labels"></div>
+    <div class="levels" id="levels" role="group" aria-label="Show level"></div>
+    <p class="hint">Drag to rotate · scroll to zoom · click any area</p>
+    <div class="legend" id="legend"></div>
+    <div class="tools">
+      <button class="tool" id="t-explode" aria-pressed="true">Separate floors</button>
+      <button class="tool" id="t-plan" aria-pressed="false">Plan view</button>
+      <button class="tool" id="t-lines" aria-pressed="true">Measurement lines</button>
+      <button class="tool" id="t-reset">Reset view</button>
+    </div>
+  </section>
+
+  <aside class="panel">
+    <div class="scope" id="scope">Whole building</div>
+    <div class="totals">
+      <button class="tot" id="v-skin" data-mode="skin" style="--c:var(--skin)" aria-pressed="false"><small><span class="dot" style="background:var(--skin)"></span>Ext. skin</small><strong></strong></button>
+      <button class="tot" id="v-bua" data-mode="bua" style="--c:var(--bua)" aria-pressed="false"><small><span class="dot" style="background:var(--bua)"></span>AAA BUA</small><strong></strong></button>
+      <button class="tot" id="v-ipms" data-mode="ipms" style="--c:var(--ipms)" aria-pressed="false"><small><span class="dot" style="background:var(--ipms)"></span>IPMS 1</small><strong></strong></button>
+    </div>
+    <div class="info" id="info"></div>
+    <div class="ledger">
+      <table>
+        <thead><tr><th class="c">Code</th><th>Component</th><th class="n" id="h-area">m²</th><th class="m">BUA</th><th class="m">IPMS</th></tr></thead>
+        <tbody id="rows"></tbody>
+        <tfoot id="foot"></tfoot>
+      </table>
+    </div>
+    <p class="note">__NOTE__</p>
+  </aside>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+(function(){
+const D = __DATA__;
+const $ = id => document.getElementById(id);
+const fmt = v => Math.abs(v) < 0.005 ? '–' : v.toLocaleString('en-US',{minimumFractionDigits:2, maximumFractionDigits:2});
+const LV_IDS = D.levels.map(l => l.id);
+
+/* ---------- Components, rows, rules ---------- */
+const FILL = {A:'#3C434B', B:'#C3B6E2', C:'#F2BE82', D:'#93D3CB', E:'#F6E08F', F:'#AFCBEE', G:'#CFE3A6', H:'#F0B7C8', P:'#B9C0C7'};
+const META = D.meta || {};
+const GROUP = Object.assign({
+  A:['Columns and walls','External walls (A2), internal walls and columns (A6), and notional boundary areas (A1) where present.'],
+  B:['Vertical penetrations','Staircases, lifts and shafts, counted on every level they pass through.'],
+  C:['Technical areas','Plant, electrical and storage rooms.'],
+  D:['Sanitary areas','Toilets and bathrooms.'],
+  E:['Circulation areas','Entrances, lobbies and corridors.'],
+  F:['Primary areas','The rooms the building is used for.'],
+  G:['Secondary areas','Secondary rooms and support spaces.'],
+  H:['Other areas','Balconies, terraces and sheltered areas outside the external skin. AAA BUA counts balconies and covered terraces only.'],
+  P:['Not counted','Plant roofs, and atrium voids on the floors where they are removed (the void is counted once, as B1.3, on one floor).']
+}, META.group || {});
+const OPEN_DEF = {nb:{code:'A1', label:'Notional boundary areas', g:'A'}, bal:{code:'H1.1', label:'Balconies', g:'H'}, cov:{code:'H1.2', label:'Covered terraces', g:'H'},
+  shel:{code:'H1.3', label:'Sheltered areas', g:'H'}, unc:{code:'H1.4', label:'Uncovered terraces', g:'H'}, perg:{code:'H1.4', label:'Terraces under pergola', g:'H'}, plant:{code:'—', label:'Plant roof', g:'P'}, void:{code:'B1.3', label:'Atrium void, removed on this floor', g:'P'}};
+const OPENKEYS = new Set(Object.keys(OPEN_DEF));
+const CODE_LABEL = Object.assign({'B1.1':'Stairs','B1.2':'Elevators','B1.3':'Atrium void','B2.1':'Technical shafts','B2.2':'Voids','C1.1':'Mechanical rooms','C1.2':'Electrical rooms','C1.3':'Garbage rooms','C1.4':'Storage','D1.1':'Toilets and bathrooms','D1.2':'Cleaners’ cupboards','E1.1':'Corridors and lobbies','F1.1':'Primary rooms','F1.2':'Offices','F1.3':'Retail','F1.4':'Clinics','G1.1':'Seating areas','G1.2':'Child-minding','G2.1':'Car parking'}, D.code_labels || {});
+const roomsAll = Object.values(D.rooms).flat(), opensAll = D.opens;
+const KEYS = [];
+['A','B','C','D','E','F','G','H','P'].forEach(g => {
+  const rows = [];
+  if(g === 'A'){ rows.push({key:'a2', code:'A2', label:'External walls'}, {key:'a6', code:'A6', label:'Internal walls and columns'}); }
+  [...new Set(roomsAll.map(r => r.code))].filter(c => c[0] === g).sort().forEach(c => rows.push({key:c, code:c, label:CODE_LABEL[c] || c}));
+  Object.keys(OPEN_DEF).filter(k => OPEN_DEF[k].g === g && opensAll.some(o => o.key === k)).forEach(k => rows.push({key:k, code:OPEN_DEF[k].code, label:(META.open_labels||{})[k] || OPEN_DEF[k].label}));
+  if(rows.length){ KEYS.push({g}, ...rows); }
+});
+const uniq = a => [...new Set(a)];
+const DESC = Object.assign({
+  a2:'The thickness of the external walls: external skin area less internal skin area.',
+  a6:'Internal walls, partitions, columns and small shafts: internal skin area less the measured rooms.'
+}, META.desc || {});
+KEYS.forEach(r => { if(!r.key || DESC[r.key]) return;
+  if(OPENKEYS.has(r.key)) DESC[r.key] = uniq(opensAll.filter(o => o.key === r.key).map(o => o.note || o.name)).join(' ');
+  else DESC[r.key] = uniq(roomsAll.filter(x => x.code === r.key).map(x => x.name)).join(', ') + '.'; });
+const letter = k => k==='a2'||k==='a6' ? 'A' : OPENKEYS.has(k) ? OPEN_DEF[k].g : k[0];
+const compFill = k => FILL[letter(k)];
+const inSkin = k => !OPENKEYS.has(k);
+const BUA_ADD = new Set(['cov','bal']); const IPMS_ONLY = new Set(['unc','perg','shel','nb']);
+const inBua = k => inSkin(k) || BUA_ADD.has(k);
+const inIpms = k => k!=='plant' && k!=='void';
+// values per level
+function levelVals(id){
+  const s = D.sched[id], v = {a2:s.a2, a6:s.a6};
+  for(const c in s.comp) v[c] = s.comp[c];
+  s.opens.forEach(([k,n,a]) => v[k] = (v[k]||0) + a);
+  return v;
+}
+const LVV = {}; LV_IDS.forEach(id => LVV[id] = levelVals(id));
+const LABEL = {}; KEYS.forEach(r => { if(r.key) LABEL[r.key] = r; });
+
+/* ---------- Theme ---------- */
+let tok = {};
+function readTok(){ const cs = getComputedStyle(document.documentElement);
+  ['stage','ghost','edge','ground','skin','bua','ipms','red','ink','sel'].forEach(k => tok[k] = cs.getPropertyValue('--'+k).trim() || '#888'); }
+readTok();
+
+/* ---------- Scene ---------- */
+const stage = $('stage'), canvas = $('cv');
+const renderer = new THREE.WebGLRenderer({canvas, antialias:true});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 2));
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(36, 1, 0.3, 400);
+const ALLPTS = [...Object.values(D.skin).flat(), ...D.opens.map(o => o.poly).flat()];
+const BX0 = Math.min(...ALLPTS.map(p => p[0])), BX1 = Math.max(...ALLPTS.map(p => p[0])), BY0 = Math.min(...ALLPTS.map(p => p[1])), BY1 = Math.max(...ALLPTS.map(p => p[1]));
+const ZMIN = Math.min(0, ...D.levels.map(l => l.z0)), ZMAX = Math.max(...D.levels.map(l => l.z0 + l.h));
+const SPAN = Math.max(BX1-BX0, BY1-BY0, (ZMAX-ZMIN)*1.2, 8), K = SPAN/18;
+const HOME = {pos:new THREE.Vector3(30*K, 26*K, 36*K), target:new THREE.Vector3(0, (ZMIN+ZMAX)*0.42, 0)};
+camera.position.copy(HOME.pos);
+const controls = new THREE.OrbitControls(camera, canvas);
+controls.target.copy(HOME.target); controls.enableDamping = true; controls.dampingFactor = 0.08;
+controls.minDistance = 6*K; controls.maxDistance = 140*K;
+scene.add(new THREE.HemisphereLight(0xffffff, 0x8a8f96, 0.62));
+const sun = new THREE.DirectionalLight(0xffffff, 0.42); sun.position.set(20, 40, 15); scene.add(sun);
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(Math.max(80, SPAN*4), Math.max(80, SPAN*4)), new THREE.MeshBasicMaterial({transparent:true, opacity:.4, depthWrite:false, side:THREE.DoubleSide}));
+ground.rotation.x = -Math.PI/2; ground.position.y = -0.01; scene.add(ground);
+const hc = document.createElement('canvas'); hc.width = hc.height = 64;
+{ const g = hc.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0,0,64,64); g.strokeStyle = 'rgba(0,0,0,.38)'; g.lineWidth = 6;
+  for(let i=-64;i<128;i+=16){ g.beginPath(); g.moveTo(i,0); g.lineTo(i+64,64); g.stroke(); } }
+const hatchTex = new THREE.CanvasTexture(hc); hatchTex.wrapS = hatchTex.wrapT = THREE.RepeatWrapping;
+
+const CX = (BX0+BX1)/2, CZ = (BY0+BY1)/2;
+const items = [], levelGroups = [], roomLabels = [], skinLines = [];
+const mat = o => new THREE.MeshStandardMaterial(Object.assign({roughness:.85, metalness:0, transparent:true}, o));
+function addItem(group, mesh, key, role, base){ mesh.userData = {key, role}; group.add(mesh); items.push({mesh, key, role, base}); return mesh; }
+function boxMesh(x0,y0,x1,y1,zb,zt){
+  const m = new THREE.Mesh(new THREE.BoxGeometry(Math.max(x1-x0,.01), Math.max(zt-zb,.01), Math.max(y1-y0,.01)), mat({}));
+  m.position.set((x0+x1)/2-CX, (zb+zt)/2, (y0+y1)/2-CZ); return m;
+}
+function shapeFrom(pts){ const s = new THREE.Shape(); pts.forEach(([x,y],i) => i ? s.lineTo(x-CX,y-CZ) : s.moveTo(x-CX,y-CZ)); s.closePath(); return s; }
+function extrude(pts, hole, zb, zt){
+  const s = shapeFrom(pts);
+  if(hole){ const h = new THREE.Path(); hole.slice().reverse().forEach(([x,y],i) => i ? h.lineTo(x-CX,y-CZ) : h.moveTo(x-CX,y-CZ)); h.closePath(); s.holes.push(h); }
+  const m = new THREE.Mesh(new THREE.ExtrudeGeometry(s, {depth:zt-zb, bevelEnabled:false}), mat({}));
+  m.rotation.x = Math.PI/2; m.position.y = zt; return m;
+}
+function edges(mesh, group, key){
+  const e = new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry), new THREE.LineBasicMaterial({transparent:true}));
+  e.position.copy(mesh.position); e.rotation.copy(mesh.rotation); e.userData = {key, role:'edge'}; group.add(e); items.push({mesh:e, key, role:'edge'});
+}
+function loop(group, pts, z){
+  const v = pts.map(([x,y]) => new THREE.Vector3(x-CX, z, y-CZ)); v.push(v[0].clone());
+  const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints(v), new THREE.LineBasicMaterial({transparent:true})); group.add(l); skinLines.push(l);
+}
+function vlines(group, pts, z0, z1){
+  const v = []; pts.forEach(([x,y]) => v.push(new THREE.Vector3(x-CX,z0,y-CZ), new THREE.Vector3(x-CX,z1,y-CZ)));
+  const l = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(v), new THREE.LineBasicMaterial({transparent:true})); group.add(l); skinLines.push(l);
+}
+function centroid(p){ let x=0,y=0; p.forEach(q => {x+=q[0]; y+=q[1];}); return [x/p.length, y/p.length]; }
+function bbox(p){ const xs=p.map(q=>q[0]), ys=p.map(q=>q[1]); return [Math.min(...xs),Math.min(...ys),Math.max(...xs),Math.max(...ys)]; }
+function inside(p, x, y){ let c=false; for(let i=0,j=p.length-1;i<p.length;j=i++){ const [xi,yi]=p[i],[xj,yj]=p[j]; if(((yi>y)!=(yj>y)) && (x < (xj-xi)*(y-yi)/(yj-yi)+xi)) c=!c; } return c; }
+function labelPt(p){ // a point inside the polygon near its centroid
+  let [x,y] = centroid(p); if(inside(p,x,y)) return [x,y];
+  const b = bbox(p); for(let i=1;i<20;i++) for(let j=1;j<20;j++){ const X=b[0]+(b[2]-b[0])*i/20, Y=b[1]+(b[3]-b[1])*j/20; if(inside(p,X,Y)) return [X,Y]; } return [x,y];
+}
+function label(group, lvId, p, z, name, code, area){
+  const b = bbox(p), big = (b[2]-b[0]) >= 2.4 && (b[3]-b[1]) >= 1.6;
+  const el = document.createElement('div'); el.className = 'rl' + (big ? '' : ' sm');
+  el.innerHTML = big ? `<b>${name}</b>${code} · ${fmt(area)} m²` : code; el.hidden = true; $('labels').appendChild(el);
+  const [x,y] = labelPt(p); roomLabels.push({el, level:lvId, local:new THREE.Vector3(x-CX, z, y-CZ), group});
+}
+function stairs(group, r, z0, h, key){
+  const [x0,y0,x1,y1] = bbox(r), w = x1-x0, L = y1-y0;
+  // flights run along X (longer side)
+  const along = w > L, run = (along ? w : L) - 1.1, n = 9, top = h - 0.3;
+  for(let f=0; f<2; f++) for(let i=0;i<n;i++){
+    const zt = z0 + 0.09 + f*top/2 + (top/2)*(i+1)/n;
+    if(along){
+      const xa = f===0 ? x0 + run*i/n : x1 - 1.1 - run*(i+1)/n, xb = f===0 ? x0 + run*(i+1)/n : x1 - 1.1 - run*i/n;
+      const ya = f===0 ? y0+.05 : y0+L/2+.05, yb = f===0 ? y0+L/2-.05 : y1-.05;
+      addItem(group, boxMesh(xa,ya,xb,yb,zt-.17,zt), key, 'step');
+    }
+  }
+  addItem(group, boxMesh(x1-1.1, y0+.05, x1-.05, y1-.05, z0+.09+top/2-.17, z0+.09+top/2), key, 'step');
+}
+function slats(group, poly, zb, zt, key, bb){
+  const b = bbox(poly);
+  for(let y = b[1]+0.15; y < b[3]; y += 0.32){
+    const xs = [];
+    for(let i=0,j=poly.length-1;i<poly.length;j=i++){ const [xi,yi]=poly[i],[xj,yj]=poly[j]; if((yi>y)!=(yj>y)) xs.push(xi + (y-yi)*(xj-xi)/(yj-yi)); }
+    xs.sort((a,b)=>a-b);
+    for(let k=0;k+1<xs.length;k+=2) addItem(group, boxMesh(xs[k], y-0.04, xs[k+1], y+0.04, zb, zt), key, 'canopy', '#C9CED4');
+  }
+  // perimeter beams
+  for(let i=0;i<poly.length;i++){ const [a,b2]=[poly[i], poly[(i+1)%poly.length]];
+    const x0=Math.min(a[0],b2[0]), x1=Math.max(a[0],b2[0]), y0=Math.min(a[1],b2[1]), y1=Math.max(a[1],b2[1]);
+    const onBuilding = bb && (x0>=bb[0]-.01 && x1<=bb[2]+.01 && y0>=bb[1]-.01 && y1<=bb[3]+.01);
+    if(onBuilding) continue;
+    addItem(group, boxMesh(x0-.05, y0-.05, Math.max(x1,x0+.1)+.05, Math.max(y1,y0+.1)+.05, zb-.12, zt), key, 'canopy', '#B9C0C7');
+    // a post at the outer corner
+    addItem(group, boxMesh(a[0]-.08, a[1]-.08, a[0]+.08, a[1]+.08, 0, zb-.12), key, 'detail', '#AEB5BC');
+  }
+}
+function parapet(group, poly, z0, z1, key){
+  for(let i=0;i<poly.length;i++){ const [a,b]=[poly[i], poly[(i+1)%poly.length]];
+    const x0=Math.min(a[0],b[0]), x1=Math.max(a[0],b[0]), y0=Math.min(a[1],b[1]), y1=Math.max(a[1],b[1]);
+    addItem(group, boxMesh(x0, y0, x1===x0 ? x0+.15 : x1, y1===y0 ? y0+.15 : y1, z0, z1), key, 'struct', '#C3C8CE');
+  }
+}
+
+/* ---------- Build levels ---------- */
+const CONC = '#B9BFC6';
+D.levels.forEach((L, li) => {
+  const group = new THREE.Group(); scene.add(group);
+  const id = L.id, z0 = L.z0, h = L.h, zc = z0 + h - 0.25;
+  const skin = D.skin[id], internal = D.internal[id];
+  // floor slab
+  const prev = li > 0 ? D.levels[li-1] : null, next = D.levels[li+1] || null;
+  if(!prev) addItem(group, extrude(skin, null, Math.min(0, z0-0.3), z0), 'slab', 'slab');
+  else addItem(group, extrude(L.roof ? D.skin[prev.id] : skin, null, z0-0.25, z0), 'slab', 'slab');
+  addItem(group, extrude(skin, null, z0, z0+.04), 'a6', 'plate');
+  const ring = extrude(skin, internal, z0+.04, zc); addItem(group, ring, 'a2', 'ring'); edges(ring, group, 'a2');
+  if(!next) addItem(group, extrude(skin, null, zc, zc+0.25), 'slab', 'slab');
+  if(L.roof && prev) parapet(group, D.skin[prev.id], z0, z0+1.2, 'struct');
+  D.rooms[id].forEach(r => {
+    addItem(group, extrude(r.poly, null, z0+.04, z0+.09), r.code, 'tile');
+    const vol = extrude(r.poly, null, z0+.09, zc-.02); addItem(group, vol, r.code, 'vol'); edges(vol, group, r.code);
+    if(r.code === 'B1.1') stairs(group, r.poly, z0, h, r.code);
+    label(group, id, r.poly, z0+.12, r.name, r.code, r.area);
+  });
+  D.opens.filter(o => o.level === id).forEach(o => {
+    const grade = o.grade !== undefined ? o.grade : (li === 0 || (prev && prev.z0 < 0 && z0 >= 0 && z0 < 1));
+    const zb = grade ? 0.0 : z0, zt = grade ? 0.15 : z0 + 0.06;
+    addItem(group, extrude(o.poly, null, zb, zt), o.key, 'tile');
+    const ztop = o.ztop !== undefined ? o.ztop : (next ? next.z0 - 0.13 : z0 + h);
+    if(o.key === 'perg') slats(group, o.poly, ztop, ztop + 0.1, 'perg', next ? bbox(D.skin[next.id]) : null);
+    if(o.key === 'cov' || o.key === 'shel'){ const vol = extrude(o.poly, null, zt, ztop); addItem(group, vol, o.key, 'vol'); }
+    label(group, id, o.poly, zt+.03, o.name, LABEL[o.key].code, o.area);
+  });
+  loop(group, skin, z0+.12); loop(group, skin, zc); vlines(group, skin, z0+.12, zc);
+  const el = document.createElement('div'); el.className = 'lvl'; el.textContent = L.id; $('labels').appendChild(el);
+  levelGroups.push({id, group, z0, h, labelEl:el, anchor:new THREE.Vector3(BX0-0.6-CX, z0+h/2, BY1-CZ)});
+});
+
+/* ---------- State and paint ---------- */
+let mode = 'compare', sel = null, level = 'all', explodeT = 1, explode = 1, plan = false, showLines = true;
+const GAP = 3.0;
+function stateOf(k){
+  if(k === 'slab' || k === 'struct') return {c:null, neutral:true};
+  if(sel){ const hit = sel.type === 'key' ? sel.v === k : letter(k) === sel.v; return hit ? {c:tok.sel, sel:true} : {c:null}; }
+  switch(mode){
+    case 'comp': return {c:compFill(k)};
+    case 'skin': return {c: inSkin(k) ? tok.skin : null};
+    case 'bua': return {c: inBua(k) ? tok.bua : null};
+    case 'ipms': return {c: inIpms(k) ? tok.ipms : null};
+    default:
+      if(inSkin(k)) return {c:tok.skin};
+      if(BUA_ADD.has(k)) return {c:tok.bua};
+      if(IPMS_ONLY.has(k)) return {c:tok.ipms, hatch:true};
+      return {c:null};
+  }
+}
+const shade = (hex, f) => { const c = new THREE.Color(hex); c.multiplyScalar(f); return c; };
+function paint(){
+  ground.material.color.set(tok.ground); renderer.setClearColor(tok.stage, 1);
+  items.forEach(it => {
+    const m = it.mesh.material, st = stateOf(it.key), on = !!st.c;
+    const set = (col, op, dw) => { if(col!==undefined && m.color) m.color.set(col); m.opacity = op; m.depthWrite = dw; };
+    switch(it.role){
+      case 'slab': set(tok.ghost, .3, false); break;
+      case 'struct': set(it.base, sel ? .15 : .55, false); break;
+      case 'tile':
+        if(on){ set(st.c, 1, true); const want = st.hatch ? hatchTex : null; if(m.map !== want){ m.map = want; m.needsUpdate = true; } }
+        else { set(tok.ghost, .45, true); if(m.map){ m.map = null; m.needsUpdate = true; } } break;
+      case 'vol': on ? set(st.c, st.sel ? .45 : .16, false) : set(tok.ghost, .03, false); break;
+      case 'plate': on ? set(mode==='comp'&&!st.sel ? FILL.A : shade(st.c,.75), 1, true) : set(tok.ghost, .5, true); break;
+      case 'ring': on ? set(mode==='comp'&&!st.sel ? FILL.A : st.c, st.sel ? .75 : .42, false) : set(tok.ghost, .07, false); break;
+      case 'step': on ? set(shade(st.c,.86), 1, true) : set(tok.ghost, .12, false); break;
+      case 'detail': on ? set(it.base, 1, true) : set(tok.ghost, .14, false); break;
+      case 'canopy': on ? set(it.base, plan ? .25 : .75, false) : set(tok.ghost, .1, false); break;
+      case 'edge': m.color.set(tok.edge); m.opacity = on ? (st.sel ? .5 : .18) : .04; break;
+    }
+  });
+  skinLines.forEach(l => { l.material.color.set(tok.red); l.material.opacity = sel ? .35 : 1; l.visible = showLines; });
+}
+
+/* ---------- Scope ---------- */
+const LVG = id => levelGroups.find(l => l.id === id);
+const keyVal = k => level === 'all' ? LV_IDS.reduce((s,id) => s + (LVV[id][k]||0), 0) : (LVV[level][k]||0);
+const groupVal = g => KEYS.filter(r => r.key && letter(r.key) === g).reduce((s,r) => s + keyVal(r.key), 0);
+const lineVal = n => level === 'all' ? LV_IDS.reduce((s,id) => s + D.sched[id][n], 0) : D.sched[level][n];
+
+/* ---------- Panel ---------- */
+const MODE_TXT = {
+  comp:['Components','Every space coloured by its component (A to H), as in the AAA area calculation workbook. Click any part of the building, or any row, to isolate it.'],
+  skin:['External skin area','Enclosed area of every level, measured to the outer face of the external walls (red line).'],
+  bua:['AAA built-up area',META.bua_text || 'External skin area plus balconies and covered terraces. Uncovered terraces, terraces under pergolas, sheltered areas, notional boundary areas and plant roofs are left out.'],
+  ipms:['IPMS 1',META.ipms_text || 'External skin area plus every balcony, terrace, sheltered and notional boundary area. Plant roofs are not counted.']
+};
+const plus = v => Math.abs(v) < 0.005 ? '–' : '+' + fmt(v);
+const sw = (c, h) => `<span class="sw${h?' hatch':''}" style="background-color:${c}"></span>`;
+function renderTotals(){
+  [['skin','skin'],['bua','bua'],['ipms','ipms']].forEach(([m,n]) => { const b = $('v-'+m); b.querySelector('strong').innerHTML = fmt(lineVal(n)) + '<i>m²</i>'; b.setAttribute('aria-pressed', String(!sel && mode === m)); });
+  $('scope').textContent = level === 'all' ? (META.scope || 'Whole building') : D.levels.find(l => l.id === level).name;
+  $('h-area').textContent = level === 'all' ? 'm² total' : `m² ${level}`;
+}
+function renderInfo(){
+  const info = $('info');
+  if(sel && sel.type === 'key'){
+    const k = sel.v, r = LABEL[k];
+    const chip = (on, c, t) => `<span class="chip ${on?'yes':'no'}" style="--c:${c}"><span class="dot" style="background:${c}"></span>${t}</span>`;
+    const lv = `<div class="lv" style="grid-template-columns:repeat(${Math.min(D.levels.length,4)},minmax(0,1fr))">${D.levels.map(L => `<div><span>${L.id}</span><b>${fmt(LVV[L.id][k]||0)}</b></div>`).join('')}</div>`;
+    info.innerHTML = `<div class="k"><span class="code" style="background:${compFill(k)};${letter(k)==='A'?'color:#fff':''}">${r.code}</span>${GROUP[letter(k)][0]}</div>
+      <h2>${r.label}</h2><div class="big">${fmt(keyVal(k))}<i>m²</i></div><p>${DESC[k]||''}</p>
+      <div class="chips">${chip(inSkin(k), tok.skin, 'Ext. skin')}${chip(inBua(k), tok.bua, 'AAA BUA')}${chip(inIpms(k), tok.ipms, 'IPMS 1')}</div>${lv}`;
+    return;
+  }
+  if(sel && sel.type === 'grp'){
+    const g = sel.v;
+    info.innerHTML = `<div class="k"><span class="code" style="background:${FILL[g]};${g==='A'?'color:#fff':''}">${g==='P'?'—':g}</span>Component group</div><h2>${GROUP[g][0]}</h2><div class="big">${fmt(groupVal(g))}<i>m²</i></div><p>${GROUP[g][1]}</p>`;
+    return;
+  }
+  if(mode === 'compare'){
+    const s = lineVal('skin'), b = lineVal('bua'), ip = lineVal('ipms');
+    const rep = level === 'all' && D.report_bua ? `<p>${META.report_label || 'Report'}: BUA ${fmt(D.report_bua)} m². Measured external skin: ${fmt(s)} m² (${((s/D.report_bua-1)*100).toFixed(1)}%).</p>` : '';
+    info.innerHTML = `<div class="k">Compare</div><h2>How the three measures build up</h2>
+      <div class="flow">
+        <div>${sw(tok.skin)}<span>External skin area</span><b>${fmt(s)}</b></div>
+        <div>${sw(tok.bua)}<span>+ Balconies and covered terraces</span><b>${plus(b-s)}</b></div>
+        <div class="eq"><span></span><span>= AAA BUA</span><b>${fmt(b)}</b></div>
+        <div>${sw(tok.ipms, true)}<span>+ Open and sheltered areas (IPMS 1 only)</span><b>${plus(ip-b)}</b></div>
+        <div class="eq"><span></span><span>= IPMS 1</span><b>${fmt(ip)}</b></div>
+      </div>${rep}`;
+    return;
+  }
+  const t = MODE_TXT[mode], n = {comp:null, skin:'skin', bua:'bua', ipms:'ipms'}[mode];
+  info.innerHTML = `<div class="k">Showing</div><h2>${t[0]}</h2>${n ? `<div class="big">${fmt(lineVal(n))}<i>m²</i></div>` : ''}<p>${t[1]}</p>`;
+}
+function renderRows(){
+  const tb = $('rows'); tb.innerHTML = '';
+  const mk = (on, c) => `<span class="mk${on?'':' no'}" style="--c:${c}"></span>`;
+  KEYS.forEach(r => {
+    const tr = document.createElement('tr'); tr.tabIndex = 0;
+    if(r.g){
+      tr.className = 'g' + (sel && sel.type==='grp' && sel.v===r.g ? ' sel' : '');
+      tr.innerHTML = `<td class="c">${sw(FILL[r.g])}${r.g==='P'?'':r.g}</td><td>${GROUP[r.g][0]}</td><td class="n">${fmt(groupVal(r.g))}</td><td></td><td></td>`;
+      tr.onclick = () => select({type:'grp', v:r.g});
+    } else {
+      if(sel && sel.type==='key' && sel.v===r.key) tr.className = 'sel';
+      tr.innerHTML = `<td class="c">${r.code}</td><td>${r.label}</td><td class="n">${fmt(keyVal(r.key))}</td><td class="m">${mk(inBua(r.key), tok.bua)}</td><td class="m">${mk(inIpms(r.key), tok.ipms)}</td>`;
+      tr.onclick = () => select({type:'key', v:r.key});
+    }
+    tr.onkeydown = e => { if(e.key==='Enter'||e.key===' '){ e.preventDefault(); tr.onclick(); } };
+    tb.appendChild(tr);
+  });
+  $('foot').innerHTML = [['s','External skin area','skin'],['b','AAA BUA','bua'],['i','IPMS 1','ipms']].map(([c,t,n]) => `<tr class="${c}"><td></td><td>${t}</td><td class="n">${fmt(lineVal(n))}</td><td></td><td></td></tr>`).join('');
+}
+function renderLegend(){
+  const L = $('legend'); let h = ''; L.classList.toggle('grid', !sel && mode === 'comp');
+  if(sel) h = `<div>${sw(tok.sel)}Selected: ${sel.type==='key' ? LABEL[sel.v].label : GROUP[sel.v][0]}</div>`;
+  else if(mode === 'comp') h = Object.keys(GROUP).map(g => `<div>${sw(FILL[g])}${g==='P'?'':g+' '}${GROUP[g][0]}</div>`).join('');
+  else if(mode === 'compare') h = `<div>${sw(tok.skin)}Inside the external skin</div><div>${sw(tok.bua)}Added by AAA BUA</div><div>${sw(tok.ipms, true)}Added by IPMS 1 only</div><div>${sw(tok.ghost)}Not counted</div>`;
+  else h = `<div>${sw(tok[mode])}Included</div><div>${sw(tok.ghost)}Not included</div>`;
+  if(showLines) h += `<div class="wide"><span class="ln"></span>External skin (measurement line)</div>`;
+  L.innerHTML = h;
+}
+function sync(){
+  document.querySelectorAll('#modes [data-mode]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.mode === mode)));
+  document.querySelectorAll('#levels button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.l === level)));
+  renderTotals(); renderInfo(); renderRows(); renderLegend(); paint();
+  if(sel && innerWidth > 980){ const r = document.querySelector('#rows tr.sel'); if(r) r.scrollIntoView({block:'nearest'}); }
+}
+function setMode(m){ mode = m; sel = null; sync(); }
+function select(s){ sel = (sel && s && sel.type===s.type && sel.v===s.v) ? null : s; sync(); }
+document.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
+
+/* ---------- Levels and tools ---------- */
+['all', ...LV_IDS].forEach(id => { const b = document.createElement('button'); b.dataset.l = id; b.textContent = id === 'all' ? 'All levels' : id; b.onclick = () => setLevel(id); $('levels').appendChild(b); });
+const levelY = L => L.z0 + levelGroups.indexOf(L) * GAP * explode;
+function setLevel(id){
+  level = id; levelGroups.forEach(L => L.group.visible = (id === 'all' || L.id === id)); ground.visible = id === 'all' || id === (D.levels.find(l => l.z0 >= -0.01) || D.levels[0]).id;
+  if(id !== 'all' && !plan) setPlan(true); else if(id === 'all' && plan) setPlan(false); else frameView();
+  sync();
+}
+function frameView(){
+  if(level === 'all'){
+    const t = HOME.target.clone(); t.y += GAP * explode; controls.target.copy(t);
+    if(plan) camera.position.set(t.x, t.y + 58*K, t.z + 0.01); else { camera.position.copy(HOME.pos); camera.position.y += GAP * explode; }
+  } else {
+    const L = LVG(level), y = levelY(L), t = new THREE.Vector3(0, y, plan ? 1.2 : 0); controls.target.copy(t);
+    if(plan) camera.position.set(0, y + 47*K, t.z + 0.01); else camera.position.set(18*K, y + 17*K, 22*K);
+  }
+  controls.update();
+}
+function setPlan(p){ plan = p; $('t-plan').setAttribute('aria-pressed', String(p)); $('t-plan').textContent = p ? '3D view' : 'Plan view'; frameView(); paint(); }
+$('t-plan').onclick = () => setPlan(!plan);
+$('t-explode').onclick = () => { explodeT = explodeT ? 0 : 1; $('t-explode').setAttribute('aria-pressed', String(!!explodeT)); };
+$('t-lines').onclick = () => { showLines = !showLines; $('t-lines').setAttribute('aria-pressed', String(showLines)); renderLegend(); paint(); };
+$('t-reset').onclick = () => { setLevel('all'); explodeT = 1; explode = 1; $('t-explode').setAttribute('aria-pressed','true'); setPlan(false); };
+
+/* ---------- Picking ---------- */
+const ray = new THREE.Raycaster(), ptr = new THREE.Vector2();
+const pickable = () => items.filter(it => it.role !== 'edge' && it.key !== 'slab' && it.key !== 'struct' && it.mesh.parent.visible).map(it => it.mesh);
+function pick(ev){
+  const r = canvas.getBoundingClientRect(); ptr.set(((ev.clientX-r.left)/r.width)*2-1, -((ev.clientY-r.top)/r.height)*2+1);
+  ray.setFromCamera(ptr, camera); const hits = ray.intersectObjects(pickable(), false);
+  if(!hits.length) return null; const lit = hits.find(h => stateOf(h.object.userData.key).c); return (lit || hits[0]).object.userData.key;
+}
+let down = null;
+canvas.addEventListener('pointerdown', e => { down = {x:e.clientX, y:e.clientY}; });
+canvas.addEventListener('pointerup', e => { if(!down) return; const moved = Math.hypot(e.clientX-down.x, e.clientY-down.y); down = null; if(moved > 5) return;
+  const k = pick(e); if(k) select({type:'key', v:k}); else if(sel){ sel = null; sync(); } });
+let lastMove = 0;
+canvas.addEventListener('pointermove', e => { if(e.pointerType !== 'mouse' || down) return; const now = performance.now(); if(now - lastMove < 70) return; lastMove = now; canvas.classList.toggle('hot', !!pick(e)); });
+
+/* ---------- Loop ---------- */
+function resize(){ const w = stage.clientWidth, h = stage.clientHeight; if(!w||!h) return; renderer.setSize(w,h,false); camera.aspect = w/h; camera.updateProjectionMatrix(); }
+new ResizeObserver(resize).observe(stage); resize();
+const retheme = () => { readTok(); sync(); };
+try{ matchMedia('(prefers-color-scheme: dark)').addEventListener('change', retheme); }catch(_){}
+new MutationObserver(retheme).observe(document.documentElement, {attributes:true, attributeFilter:['data-theme']});
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const v = new THREE.Vector3();
+window.__villa = window.__model = {setMode, setLevel, setPlan, select, get explode(){return explode;}, set explodeT(x){explodeT = x;}, camera, controls, render:() => renderer.render(scene, camera), levelGroups};
+function frame(){
+  const prev = explode;
+  explode += reduce ? (explodeT - explode) : (explodeT - explode) * 0.12; if(Math.abs(explodeT - explode) < 0.001) explode = explodeT;
+  levelGroups.forEach((L, i) => L.group.position.y = i * GAP * explode);
+  if(prev !== explode){ const dy = (explode - prev) * GAP * (level === 'all' ? 1 : levelGroups.indexOf(LVG(level))); controls.target.y += dy; camera.position.y += dy; }
+  controls.update(); renderer.render(scene, camera);
+  const w = stage.clientWidth, h = stage.clientHeight;
+  const project = (p, el) => { v.copy(p).project(camera); const vis = v.z < 1 && v.z > -1 && Math.abs(v.x) < 1.05 && Math.abs(v.y) < 1.05; el.hidden = !vis; if(vis){ el.style.left = ((v.x+1)/2*w)+'px'; el.style.top = ((1-v.y)/2*h)+'px'; } };
+  levelGroups.forEach(L => { if(!L.group.visible || level !== 'all'){ L.labelEl.hidden = true; return; } const a = L.anchor.clone(); a.y += L.group.position.y; project(a, L.labelEl); });
+  roomLabels.forEach(rl => { if(level !== rl.level){ rl.el.hidden = true; return; } const p = rl.local.clone(); p.y += rl.group.position.y; project(p, rl.el); });
+  requestAnimationFrame(frame);
+}
+levelGroups.forEach((L, i) => L.group.position.y = i * GAP);
+frameView(); sync(); frame();
+})();
+</script>

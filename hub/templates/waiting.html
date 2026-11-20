@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Waiting for approval – AAA Tools Hub{% endblock %}
+{% block main %}
+<div class="card narrow">
+  <h1>Waiting for approval</h1>
+  <p>Thanks, {{ who.name }}. Your account <b>{{ who.email }}</b> has been created and is waiting for an admin to approve it.</p>
+  <p class="muted small">You can close this page. Once you are approved, sign in again and the hub opens as usual.
+    If it is urgent, ask an admin to approve you on the Users page.</p>
+  <p class="row"><a class="btn2" href="/waiting">Check again</a> <a href="/logout">Sign out</a></p>
+</div>
+{% endblock %}
